@@ -1,4 +1,5 @@
 import csv
+import datetime
 import json
 import os
 from typing import Optional
@@ -9,64 +10,54 @@ from openpyxl.utils import column_index_from_string
 from openpyxl.worksheet import worksheet
 
 
-xls_path_line_yello = "./line_yellow.xlsx"
-xls_path_line_skyblue = "./line_skyblue.xlsx"
+xls_path_line_yello = "./1071.xlsx"
+xls_path_line_skyblue = "./1004.xlsx"
 
-def create_timetable(excel_path: str, timetable_path: str, 
-        sheet_weekdays_up: str, sheet_weekdays_down: str, sheet_weekends_up: str, sheet_weekends_down: str, 
-        row_weekdays_up: int, row_weekdays_down: int, row_weekends_up: int, row_weekends_down: int,
-        ) -> None:
+def create_timetable(
+    excel_path: str, route_id: int, sheet_weekdays_up: str, sheet_weekdays_down: str, sheet_weekends_up: str, sheet_weekends_down: str) -> None:
     workbook = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
 
-    os.makedirs(f"{timetable_path}/weekdays", exist_ok=True)
-    with open(f"{timetable_path}/weekdays/up.csv", "w") as f:
+    rows = []
+    for station_name, timetable in parse_data(workbook[sheet_weekdays_up]).items():
+        for time in timetable:
+            rows.append([station_name, "weekdays", "up", time["terminal"], time["time"].strftime("%H:%M:%S")])
+    for station_name, timetable in parse_data(workbook[sheet_weekdays_down]).items():
+        for time in timetable:
+            rows.append([station_name, "weekdays", "down", time["terminal"], time["time"].strftime("%H:%M:%S")])
+    for station_name, timetable in parse_data(workbook[sheet_weekends_up]).items():
+        for time in timetable:
+            rows.append([station_name, "weekends", "up", time["terminal"], time["time"].strftime("%H:%M:%S")])
+    for station_name, timetable in parse_data(workbook[sheet_weekends_down]).items():
+        for time in timetable:
+            rows.append([station_name, "weekends", "down", time["terminal"], time["time"].strftime("%H:%M:%S")])
+    with open(f"./{route_id}.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerows(parse_excel_timetable_vertical(workbook[sheet_weekdays_up], row_weekdays_up))
-    with open(f"{timetable_path}/weekdays/down.csv", "w") as f:
-        writer = csv.writer(f)
-        writer.writerows(parse_excel_timetable_vertical(workbook[sheet_weekdays_down], row_weekdays_down))
-
-    os.makedirs(f"{timetable_path}/weekends", exist_ok=True)
-    with open(f"{timetable_path}/weekends/up.csv", "w") as f:
-        writer = csv.writer(f)
-        writer.writerows(parse_excel_timetable_vertical(workbook[sheet_weekends_up], row_weekends_up))
-    with open(f"{timetable_path}/weekends/down.csv", "w") as f:
-        writer = csv.writer(f)
-        writer.writerows(parse_excel_timetable_vertical(workbook[sheet_weekends_down], row_weekends_down))
+        writer.writerows(rows)
     workbook.close()
 
 
-def parse_excel_timetable_horizontal(sheet: worksheet, column: str) -> list:
-    heading_column = "B"
-    result = []
-
-    for row_index, row in enumerate(worksheet.rows):
-        if row_index > 2:
-            if row[column_index_from_string(column) - 1].value and str(row[column_index_from_string(column) - 1].value).strip():
-                result.append([row[column_index_from_string(heading_column) - 1].value, str(row[column_index_from_string(column) - 1].value)])
-    return result
-
-
-def parse_excel_timetable_vertical(sheet: worksheet, station_row: int) -> list:
-    heading_row = 2
-    result = []
-
+def parse_data(sheet: worksheet):
+    heading_list = []
+    station_list = []
+    timetable_list = []
+    timetable_dict = {}
     for row_index, row in enumerate(sheet.rows):
-        if row_index == heading_row - 1:
-            heading_data = [cell.value for cell in row]
-        elif row_index == station_row - 1:
-            for cell_index, cell in enumerate(row):
-                if cell.value is not None and ":" in str(cell.value):
-                    result.append([heading_data[cell_index], cell.value])
-    return result
+        if row_index == 1:
+            heading_list = [cell.value for cell in row[1:]]
+        elif row_index > 2:
+            if row_index % 2 == 1:
+                station_list.append(row[0].value)
+            else:
+                timetable_list.append([cell.value for cell in row[1:]])
+    # print(timetable_list)
+    for station_index, station_name in enumerate(station_list):
+        timetable_dict[station_name] = []
+        for timetable_index, timetable in enumerate(timetable_list[station_index]):
+            if str(timetable).strip() and timetable:
+                timetable_dict[station_name].append({"time": timetable, "terminal": heading_list[timetable_index]})
+    return timetable_dict
 
-
-create_timetable(xls_path_line_skyblue, "./skyblue", 
-    "4호선(평일-상행)", "4호선(평일-하행)", "4호선(휴일-상행)", "4호선(휴일-하행)", 
-    row_weekdays_up=19, row_weekdays_down=85, row_weekends_up=19, row_weekends_down=85
-)
-
-create_timetable(xls_path_line_yello, "./yellow", 
-    "수인분당(평일-상행)", "수인분당(평일-하행)", "수인분당(휴일-상행)", "수인분당(휴일-하행)", 
-    row_weekdays_up=45, row_weekdays_down=89, row_weekends_up=45, row_weekends_down=89
-)
+create_timetable(xls_path_line_skyblue, 1004, 
+    "안산과천(4호)선_평일_상행", "안산과천(4호)선_평일_하행", "안산과천(4호)선_휴일_상행", "안산과천(4호)선_휴일_하행")
+create_timetable(xls_path_line_yello, 1071, 
+    "수인선 평일 상", "수인선 평일 하", "수인선 휴일 상", "수인선 휴일 하")
